@@ -14,6 +14,11 @@ int main(int argc, char** argv) {
 	const std::string file_path(argv[1]);
 	Config config(file_path);
 	Server server(std::move(config));
-	server.Run();
+	try {
+		server.Run();
+	}
+	catch (std::exception& e) {
+		std::cerr << e.what() << std::endl;
+	}
 	return 0;
 }

@@ -14,6 +14,7 @@ struct Config {
 		int cpu_limit;
 		int thread_limit;
 		std::string document_root;
+		std::string host;
 		int port;
 
 };

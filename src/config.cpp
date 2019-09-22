@@ -14,22 +14,24 @@
 Config::Config(const std::string& file_path) {
 	std::ifstream file(file_path, std::ifstream::in);
 	std::unordered_set<std::string> parsing_set = {
-			"cpu_limit", "thread_limit", "document_root", "port"
+			"cpu_limit", "thread_limit", "document_root", "port", "host"
 	};
 	std::unordered_map<std::string, std::string> parsing_map;
 	while (file.good()) {
 		std::string line;
 		std::getline(file, line);
-		std::istringstream line_stream(line);
-		std::string key;
-		line_stream >> key;
-		auto iter = parsing_set.find(key);
-		if (iter == parsing_set.end()) {
-			throw std::invalid_argument("Invalid config, unknown field");
+		if (!line.empty()) {
+			std::istringstream line_stream(line);
+			std::string key;
+			line_stream >> key;
+			auto iter = parsing_set.find(key);
+			if (iter == parsing_set.end()) {
+				throw std::invalid_argument("Invalid config, unknown field");
+			}
+			std::string value;
+			line_stream >> value;
+			parsing_map[key] = value;
 		}
-		std::string value;
-		line_stream >> value;
-		parsing_map[key] = value;
 	}
 
 	auto iter = parsing_map.find("cpu_limit");
@@ -46,6 +48,14 @@ Config::Config(const std::string& file_path) {
 	ss.clear();
 	ss.str(iter->second);
 	ss >> thread_limit;
+
+	iter = parsing_map.find("host");
+	if (iter == parsing_map.end()) {
+		throw std::invalid_argument("Invalid config, no host found");
+	}
+	ss.clear();
+	ss.str(iter->second);
+	ss >> host;
 
 	iter = parsing_map.find("port");
 	if (iter == parsing_map.end()) {

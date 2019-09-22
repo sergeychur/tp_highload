@@ -37,3 +37,6 @@
 
 # CMake
 cmake-build-debug*
+
+# static files
+static*
