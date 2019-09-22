@@ -38,6 +38,7 @@ namespace http {
 
 // connection close
 	constexpr auto CLOSE = "close";
+	constexpr auto KEEP_ALIVE = "Keep-Alive";
 
 // content types
 
@@ -65,6 +66,14 @@ namespace http {
 
 	constexpr auto JS = ".js";
 	constexpr auto SWF = ".swf";
+
+
+// version
+
+	constexpr auto DEFAULT_VERSION = "HTTP/1.1";
+// index
+
+	constexpr auto INDEX = "index.html";
 }
 
 

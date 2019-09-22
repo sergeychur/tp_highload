@@ -43,7 +43,7 @@ struct Response {
 
 class HTTPHandler {
 	public:
-		HTTPHandler();
+		HTTPHandler() = default;
 		Request ParseRequest(std::string& request);
 		Response FormResponse(const Request& req, fs::path& path);
 

@@ -21,22 +21,22 @@ Request HTTPHandler::ParseRequest(std::string &request) {
 	auto req = Request();
 	if (method.empty() || uri.empty() || uri.empty()) {
 		req.error = http::INVALID_REQ_LINE;
+		req.version = http::DEFAULT_VERSION;
 		return req;
 	}
+	req.uri = urlDecode(req.uri);
+	req.uri = req.uri.substr(0, req.uri.find("?"));
+	req.method = method;
+	req.version = version;
 	if (method != http::METHOD_GET && method != http::METHOD_HEAD) {
 		req.error = http::NOT_ALLOWED_STR;
 		return req;
 	}
-
-	req.version = version;
 	req.uri = uri;
 	bool valid = validateUri(req.uri);
 	if (!valid) {
 		req.error = http::INVALID_URI;
 	}
-	req.uri = urlDecode(req.uri);
-	req.uri = req.uri.substr(0, req.uri.find("?"));
-	req.method = method;
 	return req;
 }
 
@@ -92,7 +92,7 @@ Response HTTPHandler::FormResponse(const Request& req, fs::path& path) {
 	} else {
 		bool exception_caught = false;
 		try {
-			response.content_length = fs::file_size(path);
+			response.content_length = req.method == http::METHOD_GET ?fs::file_size(path) : 0;
 		} catch (fs::filesystem_error& e) {
 			response.code = http::INTERNAL_SERVER_ERROR;
 			exception_caught = true;
@@ -109,8 +109,8 @@ Response HTTPHandler::FormResponse(const Request& req, fs::path& path) {
 }
 
 std::string HTTPHandler::formContentType(fs::path& path) {
-	auto extension = path.extension();
-	auto iter = content_type_map.find(extension.string());
+	std::string extension = path.extension().generic_string();
+	auto iter = content_type_map.find(extension);
 	if (iter != content_type_map.end()) {
 		return iter->second;
 	}
@@ -124,6 +124,7 @@ std::ostream& operator<<(std::ostream& os, const Response& obj) {
 		os << "Date: " << obj.date << http::EOL;
 		os << "Server: " << obj.server << http::EOL;
 		os << "Connection: " << obj.connection << http::EOL;
+//		os << "Keep-Alive: 300" << http::EOL;
 		if (obj.code == http::OK) {
 			os << "Content-Length: " << obj.content_length << http::EOL;
 			if (!obj.content_type.empty()) {

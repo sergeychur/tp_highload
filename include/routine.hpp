@@ -15,7 +15,7 @@ struct Routine {
 	public:
 		Routine() = default;
 		Routine(const int id, struct sockaddr_in& addr, const std::string& root): id_(id), addr_(addr),
-				document_root_(root) {}
+				document_root_(root), http_handler(std::make_shared<HTTPHandler>()) {}
 		void Run();
 		void Stop();
 		std::shared_ptr<HTTPHandler> http_handler;
