@@ -49,20 +49,28 @@ void send_file(int fd_to_write, const std::string& file_name) {
 //		std::cout << std::strerror(errno) << std::endl;
 //	}
 //	uv_fs_req_cleanup(&open_req);
-	int fd_to_read = open(file_name.data(), O_RDONLY);
-	if (fd_to_read != -1) {
-		struct stat buf{};
-		fstat(fd_to_read, &buf);
-		auto remained = buf.st_size;
-		struct stat sbuf{};
-		fstat(fd_to_write, &sbuf);
-		while(remained > 0) {
-			auto sent = sendfile(fd_to_write, fd_to_read, 0, 1024);
-			remained -= sent;
-			std::cout << std::strerror(errno) << std::endl;
-		}
-		close(fd_to_read);
-	}
+//	int fd_to_read = open(file_name.data(), O_RDONLY);
+//	if (fd_to_read != -1) {
+//		struct stat buf{};
+//		fstat(fd_to_read, &buf);
+//		auto remained = buf.st_size;
+//		struct stat sbuf{};
+//		fstat(fd_to_write, &sbuf);
+//		auto status = 0;
+//		while(status != -1) {
+//			auto sent = sendfile(fd_to_write, fd_to_read, 0, 1024);
+//			remained -= sent;
+//			status = sent;
+//			std::cout << status << std::strerror(errno) << std::endl;
+//		}
+//		close(fd_to_read);
+//	}
+}
+
+void on_send(uv_fs_t* req) {
+//	auto kek = (Kek*)req->data;
+//	uv_close((uv_handle_t*)kek->client, nullptr);
+//	uv_fs_req_cleanup(req);
 }
 
 void on_write(uv_write_t *req, int status) {
@@ -70,12 +78,7 @@ void on_write(uv_write_t *req, int status) {
 		std::cerr << uv_strerror(status) << std::endl;
 		return;
 	}
-	auto kek = (Kek*)req->data;
-//	if (kek->if_ok && kek->if_get) {
-//		std::string line = "/home/sergey/TP_MAIL_RU/tp_3_sem/tp_highload/static/index.html";
-//		send_file(kek->client->io_watcher.fd, line);
-//	}
-	uv_close((uv_handle_t*)kek->client, nullptr);
+
 }
 
 std::string get_path_string(const std::string& root, const std::string& file_path) {
@@ -87,8 +90,8 @@ std::string get_path_string(const std::string& root, const std::string& file_pat
 	return root + file_path;
 }
 
-void on_send(uv_fs_t* req) {
-	uv_fs_req_cleanup(req);
+void on_close(uv_handle_t* client) {
+
 }
 
 void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
@@ -114,24 +117,31 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 		std::ostringstream ss;
 		ss << response;
 		auto str = ss.str();
+		int status = 0;
 		uv_buf_t wrbuf = uv_buf_init(str.data(), str.length());
-		auto kek = Kek();
-		kek.client = client;
-		kek.file_name = path_string;
-		kek.if_get = request.method == http::METHOD_GET;
-		kek.if_ok = response.code == http::OK;
-		req->data = (void*)&kek;
-//		send_file(client->io_watcher.fd, path_string);
-		uv_write(req.get(), client, &wrbuf, 1, on_write);
-//		if (send(client->io_watcher.fd, wrbuf.base, wrbuf.len, 0) >= 0) {
-//			if (request.method == http::METHOD_GET && response.code == http::OK) {
-//				send_file(client->io_watcher.fd, file_path);
-//			}
-//			uv_close((uv_handle_t*)client, nullptr);
-//		}
+		if (uv_try_write(client, &wrbuf, 1) < 0) {
+			std::cerr << "ehh " << std::strerror(errno) << std::endl;
+		} else {
+			std::cout << status << std::strerror(errno) << std::endl;
+		}
 
-		delete buf->base;
-
+		if (request.method == http::METHOD_GET && response.code == http::OK) {
+			int fd_to_read = open(path_string.data(), O_RDONLY);
+				if (fd_to_read >= 0) {
+					struct stat buf{};
+					fstat(fd_to_read, &buf);
+					auto remained = buf.st_size;
+					while(remained > 0) {
+						status = sendfile(client->io_watcher.fd, fd_to_read, 0, 1024);
+						if (status > 0) {
+							remained -= status;
+						}
+						std::cout << "sendfile " << status << std::strerror(errno) << std::endl;
+					}
+					close(fd_to_read);
+				}
+		}
+		uv_close((uv_handle_t*)client, on_close);
 	}
 }
 

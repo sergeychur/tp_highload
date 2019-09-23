@@ -123,7 +123,7 @@ std::ostream& operator<<(std::ostream& os, const Response& obj) {
 		os << obj.version << " " << obj.code << " "<< iter->second << http::EOL;
 		os << "Date: " << obj.date << http::EOL;
 		os << "Server: " << obj.server << http::EOL;
-		os << "Connection: " << obj.connection << http::EOL;
+//		os << "Connection: " << obj.connection << http::EOL;
 //		os << "Keep-Alive: 300" << http::EOL;
 		if (obj.code == http::OK) {
 			os << "Content-Length: " << obj.content_length << http::EOL;
@@ -131,6 +131,7 @@ std::ostream& operator<<(std::ostream& os, const Response& obj) {
 				os << "Content-Type: " << obj.content_type << http::EOL;
 			}
 		}
+		os << http::EOL;
 		return os;
 	}
 	throw std::runtime_error("invalid response code");
