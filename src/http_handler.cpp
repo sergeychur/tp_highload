@@ -24,15 +24,15 @@ Request HTTPHandler::ParseRequest(std::string &request) {
 		req.version = http::DEFAULT_VERSION;
 		return req;
 	}
-	req.uri = urlDecode(req.uri);
+	req.uri = uri;
 	req.uri = req.uri.substr(0, req.uri.find("?"));
+	req.uri = urlDecode(req.uri);
 	req.method = method;
 	req.version = version;
 	if (method != http::METHOD_GET && method != http::METHOD_HEAD) {
 		req.error = http::NOT_ALLOWED_STR;
 		return req;
 	}
-	req.uri = uri;
 	bool valid = validateUri(req.uri);
 	if (!valid) {
 		req.error = http::INVALID_URI;
@@ -92,7 +92,7 @@ Response HTTPHandler::FormResponse(const Request& req, fs::path& path) {
 	} else {
 		bool exception_caught = false;
 		try {
-			response.content_length = req.method == http::METHOD_GET ?fs::file_size(path) : 0;
+			response.content_length = fs::file_size(path);
 		} catch (fs::filesystem_error& e) {
 			response.code = http::INTERNAL_SERVER_ERROR;
 			exception_caught = true;

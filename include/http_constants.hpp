@@ -20,6 +20,7 @@ namespace http {
 	constexpr auto INVALID_REQ_LINE = "invalid request line";
 	constexpr auto INVALID_URI = "invalid uri";
 	constexpr auto NOT_FOUND_STR = "not found";
+	constexpr auto FORBIDDEN_STR = "forbidden";
 
 // status codes
 	constexpr int OK = 200;

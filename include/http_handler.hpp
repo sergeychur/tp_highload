@@ -54,7 +54,8 @@ class HTTPHandler {
 				{http::INVALID_URI, http::FORBIDDEN},
 				{http::INVALID_REQ_LINE, http::NOT_ALLOWED},
 				{http::NOT_ALLOWED_STR, http::NOT_ALLOWED},
-				{http::NOT_FOUND_STR, http::NOT_FOUND}
+				{http::NOT_FOUND_STR, http::NOT_FOUND},
+				{http::FORBIDDEN_STR, http::FORBIDDEN}
 		};
 		std::string formContentType(fs::path& path);
 		const std::unordered_map<std::string, std::string> content_type_map = {

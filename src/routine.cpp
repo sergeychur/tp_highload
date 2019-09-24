@@ -16,13 +16,6 @@
 #include "routine.hpp"
 #include "http_handler.hpp"
 
-struct Kek {
-	std::string file_name;
-	bool if_get;
-	bool if_ok;
-	uv_stream_t* client;
-};
-
 
 void on_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
 	buf->base = new char [suggested_size]();
@@ -81,13 +74,13 @@ void on_write(uv_write_t *req, int status) {
 
 }
 
-std::string get_path_string(const std::string& root, const std::string& file_path) {
+std::pair<std::string, bool> get_path_string(const std::string& root, const std::string& file_path) {
 	if (*(file_path.end() - 1) == '/') {
 		if (file_path.find('.') == file_path.npos) {
-			return root + file_path + http::INDEX;
+			return {root + file_path + http::INDEX, true};
 		}
 	}
-	return root + file_path;
+	return {root + file_path, false};
 }
 
 void on_close(uv_handle_t* client) {
@@ -108,10 +101,14 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 		std::string request_string(buf->base);
 		Request request;
 		request = handler->ParseRequest(request_string);
-		std::string path_string = get_path_string(routine->document_root_, request.uri);
-		fs::path file_path(path_string.data());
+		auto path_string_pair = get_path_string(routine->document_root_, request.uri);
+		fs::path file_path(path_string_pair.first.data());
 		if (!fs::exists(file_path) && request.error.empty()) {
-			request.error = http::NOT_FOUND_STR;
+			if (path_string_pair.second) {
+				request.error = http::FORBIDDEN_STR;
+			} else {
+				request.error = http::NOT_FOUND_STR;
+			}
 		}
 		auto response = handler->FormResponse(request, file_path);
 		std::ostringstream ss;
@@ -120,13 +117,13 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 		int status = 0;
 		uv_buf_t wrbuf = uv_buf_init(str.data(), str.length());
 		if (uv_try_write(client, &wrbuf, 1) < 0) {
-			std::cerr << "ehh " << std::strerror(errno) << std::endl;
+//			std::cerr << "ehh " << std::strerror(errno) << std::endl;
 		} else {
-			std::cout << status << std::strerror(errno) << std::endl;
+//			std::cout << status << std::strerror(errno) << std::endl;
 		}
 
 		if (request.method == http::METHOD_GET && response.code == http::OK) {
-			int fd_to_read = open(path_string.data(), O_RDONLY);
+			int fd_to_read = open(path_string_pair.first.data(), O_RDONLY);
 				if (fd_to_read >= 0) {
 					struct stat buf{};
 					fstat(fd_to_read, &buf);
@@ -136,7 +133,7 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 						if (status > 0) {
 							remained -= status;
 						}
-						std::cout << "sendfile " << status << std::strerror(errno) << std::endl;
+//						std::cout << "sendfile " << status << std::strerror(errno) << std::endl;
 					}
 					close(fd_to_read);
 				}
