@@ -6,8 +6,8 @@ RUN apt install -y cmake gcc-9 g++-9 libuv1.dev make
 
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 1
 
-WORKDIR /static_server
+WORKDIR /static
 COPY . .
 RUN cmake CMakeLists.txt && make
 EXPOSE 80
-CMD ["./static_server ./docker.cfg"]
+CMD /static/static_server /static/docker.cfg

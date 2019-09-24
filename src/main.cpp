@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
 		throw std::invalid_argument("No path to config file specified");
 	}
 	const std::string file_path(argv[1]);
+	std::cout << file_path << std::endl;
 	Config config(file_path);
 	Server server(std::move(config));
 	try {
