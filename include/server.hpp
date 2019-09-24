@@ -14,7 +14,6 @@ class Server {
 	public:
 		explicit Server(Config&& config);
 		void Run();
-//		void Stop();
 
 	private:
 		Config config_;

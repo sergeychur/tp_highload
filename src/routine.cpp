@@ -22,50 +22,6 @@ void on_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
 	buf->len = suggested_size;
 }
 
-void send_file(int fd_to_write, const std::string& file_name) {
-//	uv_fs_t open_req = {nullptr};
-//	int fd_to_read = uv_fs_open(client->loop, &open_req, file_name.data(), O_RDONLY, 0, nullptr);
-//
-//	if (fd_to_read != -1) {
-//		uv_fs_t stat_req = {nullptr};
-//		uv_fs_fstat(client->loop, &stat_req, fd_to_read, nullptr);
-//		auto size = stat_req.statbuf.st_size;
-//		uv_fs_t send_req = {nullptr};
-//		send_req.data = (void*)client;
-//		int fd_to_write = client->io_watcher.fd;
-//		auto remained = size;
-//		while(remained > 0) {
-//			remained -= sendfile(fd_to_read, fd_to_write, 0, 32);
-//			std::cout << remained << std::endl;
-//		}
-//		uv_fs_req_cleanup(&stat_req);
-//		std::cout << std::strerror(errno) << std::endl;
-//	}
-//	uv_fs_req_cleanup(&open_req);
-//	int fd_to_read = open(file_name.data(), O_RDONLY);
-//	if (fd_to_read != -1) {
-//		struct stat buf{};
-//		fstat(fd_to_read, &buf);
-//		auto remained = buf.st_size;
-//		struct stat sbuf{};
-//		fstat(fd_to_write, &sbuf);
-//		auto status = 0;
-//		while(status != -1) {
-//			auto sent = sendfile(fd_to_write, fd_to_read, 0, 1024);
-//			remained -= sent;
-//			status = sent;
-//			std::cout << status << std::strerror(errno) << std::endl;
-//		}
-//		close(fd_to_read);
-//	}
-}
-
-void on_send(uv_fs_t* req) {
-//	auto kek = (Kek*)req->data;
-//	uv_close((uv_handle_t*)kek->client, nullptr);
-//	uv_fs_req_cleanup(req);
-}
-
 void on_write(uv_write_t *req, int status) {
 	if(status) {
 		std::cerr << uv_strerror(status) << std::endl;
@@ -83,15 +39,11 @@ std::pair<std::string, bool> get_path_string(const std::string& root, const std:
 	return {root + file_path, false};
 }
 
-void on_close(uv_handle_t* client) {
-
-}
-
 void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 	if (nread < 0 && nread != UV_EOF) {
 		uv_close((uv_handle_t *) client, nullptr);
 		std::cerr << uv_strerror(nread) << std::endl;
-		delete buf->base;
+		delete []buf->base;
 		return;
 	}
 	if (nread > 0) {
@@ -116,30 +68,27 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 		auto str = ss.str();
 		int status = 0;
 		uv_buf_t wrbuf = uv_buf_init(str.data(), str.length());
-		if (uv_try_write(client, &wrbuf, 1) < 0) {
-//			std::cerr << "ehh " << std::strerror(errno) << std::endl;
-		} else {
-//			std::cout << status << std::strerror(errno) << std::endl;
-		}
-
+		uv_write(req.get(), client, &wrbuf, 1, on_write);
 		if (request.method == http::METHOD_GET && response.code == http::OK) {
 			int fd_to_read = open(path_string_pair.first.data(), O_RDONLY);
 				if (fd_to_read >= 0) {
 					struct stat buf{};
 					fstat(fd_to_read, &buf);
 					auto remained = buf.st_size;
-					while(remained > 0) {
+					auto sent = 1;
+					while(sent > 0) {
 						status = sendfile(client->io_watcher.fd, fd_to_read, 0, 1024);
 						if (status > 0) {
 							remained -= status;
 						}
-//						std::cout << "sendfile " << status << std::strerror(errno) << std::endl;
+						sent = status;
 					}
 					close(fd_to_read);
 				}
 		}
-		uv_close((uv_handle_t*)client, on_close);
+		uv_close((uv_handle_t*)client, nullptr);
 	}
+	delete[] buf->base;
 }
 
 void on_new_connection(uv_stream_t *server, int status) {
@@ -158,6 +107,7 @@ void on_new_connection(uv_stream_t *server, int status) {
 }
 
 void run_(void* args){
+	signal(SIGPIPE, SIG_IGN);
 	auto routine = static_cast<Routine*>(args);
 	auto loop = std::make_shared<uv_loop_t>();
 	int error = uv_loop_init(loop.get());
