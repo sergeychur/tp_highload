@@ -76,12 +76,15 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 					fstat(fd_to_read, &buf);
 					auto remained = buf.st_size;
 					auto sent = 1;
-					while(sent > 0) {
+					while(remained > 0) {
 						status = sendfile(client->io_watcher.fd, fd_to_read, 0, 1024);
 						if (status > 0) {
 							remained -= status;
 						}
 						sent = status;
+						if (status < 0) {
+							std::cerr << std::strerror(errno);
+						}
 					}
 					close(fd_to_read);
 				}
@@ -134,7 +137,7 @@ void run_(void* args){
 
 void Routine::Run() {
 	thread_ = std::make_shared<uv_thread_t>();
-	std::cerr << "started " << id_ << std::endl;
+//	std::cerr << "started " << id_ << std::endl;
 	uv_thread_create(thread_.get(), run_, (void*)this);
 }
 
