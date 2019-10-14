@@ -27,7 +27,7 @@ void on_write(uv_write_t *req, int status) {
 		std::cerr << uv_strerror(status) << std::endl;
 		return;
 	}
-
+	delete req;
 }
 
 std::pair<std::string, bool> get_path_string(const std::string& root, const std::string& file_path) {
@@ -39,21 +39,29 @@ std::pair<std::string, bool> get_path_string(const std::string& root, const std:
 	return {root + file_path, false};
 }
 
+void on_close(uv_handle_t* client) {
+	delete client;
+}
+
 void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 	if (nread < 0 && nread != UV_EOF) {
-		uv_close((uv_handle_t *) client, nullptr);
+
+		if (!uv_is_closing((uv_handle_t*)(client))) {
+			uv_close((uv_handle_t*)(client), nullptr);
+			delete client;
+		}
 		std::cerr << uv_strerror(nread) << std::endl;
 		delete []buf->base;
 		return;
 	}
 	if (nread > 0) {
-		auto req = std::make_shared<uv_write_t>();
-		auto routine = (Routine *) client->data;
-		auto handler = routine->http_handler;
+		auto req = new uv_write_t;
+		auto data = (ThreadData*) client->data;
+		auto handler = data->handler;
 		std::string request_string(buf->base);
 		Request request;
-		request = handler->ParseRequest(request_string);
-		auto path_string_pair = get_path_string(routine->document_root_, request.uri);
+		request = handler.ParseRequest(request_string);
+		auto path_string_pair = get_path_string(data->document_root, request.uri);
 		fs::path file_path(path_string_pair.first.data());
 		if (!fs::exists(file_path) && request.error.empty()) {
 			if (path_string_pair.second) {
@@ -62,13 +70,14 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 				request.error = http::NOT_FOUND_STR;
 			}
 		}
-		auto response = handler->FormResponse(request, file_path);
+		auto response = handler.FormResponse(request, file_path);
 		std::ostringstream ss;
 		ss << response;
 		auto str = ss.str();
 		int status = 0;
 		uv_buf_t wrbuf = uv_buf_init(str.data(), str.length());
-		uv_write(req.get(), client, &wrbuf, 1, on_write);
+		uv_write(req, client, &wrbuf, 1, on_write);
+
 		if (request.method == http::METHOD_GET && response.code == http::OK) {
 			int fd_to_read = open(path_string_pair.first.data(), O_RDONLY);
 				if (fd_to_read >= 0) {
@@ -77,7 +86,7 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 					auto remained = buf.st_size;
 					auto sent = 1;
 					while(remained > 0) {
-						status = sendfile(client->io_watcher.fd, fd_to_read, 0, 1024);
+						status = sendfile(client->io_watcher.fd, fd_to_read, 0, 8192);
 						if (status > 0) {
 							remained -= status;
 						}
@@ -89,7 +98,9 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 					close(fd_to_read);
 				}
 		}
-		uv_close((uv_handle_t*)client, nullptr);
+		if (!uv_is_closing((uv_handle_t*)(client))) {
+			uv_close((uv_handle_t*)(client), on_close);
+		}
 	}
 	delete[] buf->base;
 }
@@ -98,47 +109,50 @@ void on_new_connection(uv_stream_t *server, int status) {
 	if (status < 0) {
 		throw std::runtime_error(uv_strerror(status));
 	}
-	auto client = std::make_shared<uv_tcp_t>();
+	auto client = new uv_tcp_t;
 	client->data = server->data;
-	uv_tcp_init(server->loop, client.get());
-	auto stream_client = (uv_stream_t*)client.get();
+	uv_tcp_init(server->loop, client);
+	auto stream_client = (uv_stream_t*)client;
 	if (uv_accept(server, stream_client) == 0) {
 		uv_read_start(stream_client, on_alloc, on_read);
 	} else {
-		uv_close((uv_handle_t*)(client).get(), nullptr);
+		if (!uv_is_closing((uv_handle_t*)(client))) {
+			uv_close((uv_handle_t*)(client), nullptr);
+			delete client;
+		}
+
 	}
 }
 
 void run_(void* args){
 	signal(SIGPIPE, SIG_IGN);
-	auto routine = static_cast<Routine*>(args);
-	auto loop = std::make_shared<uv_loop_t>();
-	int error = uv_loop_init(loop.get());
+	auto data = (ThreadData*)(args);
+	uv_loop_t* loop = (uv_loop_t*)malloc(sizeof(uv_loop_t));
+	int error = uv_loop_init(loop);
 	if (error) {
 		std::cerr << uv_strerror(error) << std::endl;
 		return;
 	}
 
 	uv_tcp_t server = {};
-	server.data = (void*)routine;
+	server.data = (void*)data;
 	int fd = 0;
 	int option = 1;
-	uv_tcp_init_ex(loop.get(), &server, routine->addr_.sin_family);
+	uv_tcp_init_ex(loop, &server, data->addr.sin_family);
 	uv_fileno((uv_handle_t*)&server, &fd);	// get the file descriptor g=for socket
 	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option)); // allow the port reuse
-	uv_tcp_bind(&server, (struct sockaddr*)&routine->addr_, 0);
-	error = uv_listen((uv_stream_t*) &server, routine->connections_count, on_new_connection);
+	uv_tcp_bind(&server, (struct sockaddr*)&data->addr, 0);
+	error = uv_listen((uv_stream_t*) &server, data->conn_count, on_new_connection);
 	if (error) {
 		std::cerr << uv_strerror(error) << std::endl;
 		return;
 	}
-	uv_run(loop.get(), UV_RUN_DEFAULT);
+	uv_run(loop, UV_RUN_DEFAULT);
 }
 
 void Routine::Run() {
 	thread_ = std::make_shared<uv_thread_t>();
-//	std::cerr << "started " << id_ << std::endl;
-	uv_thread_create(thread_.get(), run_, (void*)this);
+	uv_thread_create(thread_.get(), run_, (void*)&data);
 }
 
 void Routine::Stop() {
